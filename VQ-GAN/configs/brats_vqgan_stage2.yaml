@@ -1,0 +1,51 @@
+model:
+  base_learning_rate: 4.5e-6
+  target: taming.models.vqgan.VQModel
+  params:
+    modalities: ['t1', 't1ce', 't2', 'flair']
+    ignore_keys: ["loss.discriminator.main.0.weight"]
+    ckpt_path: stage1.ckpt
+    stage: 2
+    embed_dim: 3
+    n_embed: 8192
+    ddconfig:
+      double_z: False
+      z_channels: 3
+      resolution: 192
+      in_channels: 1
+      out_ch: 1
+      ch: 128
+      ch_mult:
+      - 1
+      - 1
+      - 2
+      num_res_blocks: 2
+      attn_resolutions: [8]
+      dropout: 0.0
+
+    lossconfig:
+      target: taming.modules.losses.vqperceptual.VQLPIPSWithDiscriminator
+      params:
+        disc_conditional: False
+        disc_in_channels: 3
+        disc_start: 0
+        disc_weight: 0.8
+        codebook_weight: 1.0
+
+data:
+  target: main.DataModuleFromConfig
+  params:
+    batch_size: 1
+    num_workers: 8
+    train:
+      target: taming.data.custom.CustomTrain
+      params:
+        data_path: BraTS2021/TrainingData # to be filled
+    validation:
+      target: taming.data.custom.CustomTest
+      params:
+        data_path: BraTS2021/ValidationData # to be filled
+    test:
+      target: taming.data.custom.CustomTest
+      params:
+        data_path: BraTS2021/ValidationData # to be filled
