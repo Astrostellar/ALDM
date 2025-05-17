@@ -106,18 +106,24 @@ class VQModel(pl.LightningModule):
 
         return x.float()
 
-    def random_sample_modalities(self, modalities):
+    def random_sample_modalities(self, modalities, num=None):
         # sample 1 or 3 modalities
-        num_modalities = random.choice([1, len(self.modalities)-1])
+        if num is None:
+            num_modalities = random.choice([1, len(self.modalities)-1])
+        else:
+            num_modalities = num
         sampled_modalities = random.sample(modalities, num_modalities)
         return sampled_modalities
     
     def training_step(self, batch, batch_idx, optimizer_idx):
-        source = self.random_sample_modalities(self.modalities)
+        if self.stage == 1:
+            source = self.random_sample_modalities(self.modalities)
+        else:
+            source = self.random_sample_modalities(self.modalities, num=len(self.modalities)-1)
         if self.stage == 1:
             target = source
         else:
-            target = random.choice(self.modalities)
+            target = [x for x in self.modalities if x not in source]
         x_src = self.get_input(batch, source)
         x_tar = self.get_input(batch, target)
         skip_pass = 0
@@ -126,7 +132,7 @@ class VQModel(pl.LightningModule):
             xrec, qloss = self(x_src)
         else:
             z_src, qloss, _ = self.encode(x_src)
-            z_tar_rec = self.spade(z_src, target)
+            z_tar_rec = self.spade(z_src, target[0])
             z_tar, _, _ = self.encode(x_tar)
             x_tar = z_tar
             xrec = z_tar_rec
@@ -149,11 +155,11 @@ class VQModel(pl.LightningModule):
             return discloss
 
     def validation_step(self, batch, batch_idx):
-        source = [random.choice(self.modalities)]
+        source = self.random_sample_modalities(self.modalities, num=len(self.modalities)-1)
         if self.stage == 1:
             target = source
         else:
-            target = [random.choice(self.modalities)]
+            target = [x for x in self.modalities if x not in source]
         x_src = self.get_input(batch, source)
         x_tar = self.get_input(batch, target)
 
@@ -161,7 +167,7 @@ class VQModel(pl.LightningModule):
             xrec, qloss = self(x_src)
         else:
             z_src, qloss, _ = self.encode(x_src)
-            z_tar_rec = self.spade(z_src, target)
+            z_tar_rec = self.spade(z_src, target[0])
             z_tar, _, _ = self.encode(x_tar)
             x_tar = z_tar
             xrec = z_tar_rec
@@ -205,17 +211,17 @@ class VQModel(pl.LightningModule):
 
     def log_images(self, batch, **kwargs):
         log = dict()
-        source = [random.choice(self.modalities)]
+        source = self.random_sample_modalities(self.modalities, num=len(self.modalities)-1)
         if self.stage == 1:
             target = source
         else:
-            target = [random.choice(self.modalities)]
+            target = [x for x in self.modalities if x not in source]
         x_src = self.get_input(batch, source)
         x_tar = self.get_input(batch, target)
         x_src = x_src.to(self.device)
         x_tar = x_tar.to(self.device)
         if self.stage == 1: target = None
-        xrec, _ = self(x_src, target)
+        xrec, _ = self(x_src, target[0])
         # if x_src.shape[1] > 3:
         #     assert xrec.shape[1] > 3
         #     x_src = self.to_rgb(x_src)
