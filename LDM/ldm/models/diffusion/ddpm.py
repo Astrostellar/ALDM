@@ -326,10 +326,29 @@ class DDPM(pl.LightningModule):
         t = torch.randint(0, self.num_timesteps, (x.shape[0],), device=self.device).long()
         return self.p_losses(x, t, *args, **kwargs)
 
-    def get_input(self, batch, k):
-        x = batch[k]
-        return x.float()
+    def get_input(self, batch, selected_modalities):
+        sampled_x = []
+        if len(selected_modalities) == 1:
+            x = batch[selected_modalities[0]]
+            for _ in range(len(self.modalities)-1):
+                sampled_x.append(x)
+        elif len(selected_modalities) == len(self.modalities)-1:
+            for modality in selected_modalities:
+                x = batch[modality]
+                sampled_x.append(x)
 
+        # for modality in self.modalities:
+        #     if modality in selected_modalities:
+        #         x = batch[modality]
+        #         sampled_x.append(x)
+        #     else:
+        #         x = batch[modality].new_zeros(batch[modality].shape)
+        #         sampled_x.append(x)
+
+        x = torch.cat(sampled_x, dim=1)
+
+        return x.float()
+    
     def shared_step(self, batch):
         x = self.get_input(batch, self.first_stage_key)
         loss, loss_dict = self(x)
@@ -636,13 +655,20 @@ class LatentDiffusion(DDPM):
 
         return fold, unfold, normalization, weighting
 
+    def random_sample_modalities(self, modalities, num=None):
+        # sample 1 or 3 modalities
+        if num is None:
+            num_modalities = random.choice([1, len(self.modalities)-1])
+        else:
+            num_modalities = num
+        sampled_modalities = random.sample(modalities, num_modalities)
+        return sampled_modalities
+    
     @torch.no_grad()
     def get_input(self, batch, k, return_first_stage_outputs=False, force_c_encode=False,
                   cond_key=None, return_original_cond=False, bs=None):
-        source = random.choice(self.modalities)
-        target = random.choice(self.modalities)
-        while source == target:
-            target = random.choice(self.modalities)
+        source = self.random_sample_modalities(self.modalities, num=len(self.modalities)-1)
+        target = [x for x in self.modalities if x not in source]
             
         x_src = super().get_input(batch, source)
         x_tgt = super().get_input(batch, target)
@@ -653,15 +679,15 @@ class LatentDiffusion(DDPM):
         x_src = x_src.to(self.device)
         x_tgt = x_tgt.to(self.device)
         z_src, _, _ = self.first_stage_model.encode(x_src)
-        z_tgtl, _, _ = self.first_stage_model.encode(x_src, target)
+        z_tgtl, _, _ = self.first_stage_model.encode(x_src, target[0])
         z_tgt, _, _ = self.first_stage_model.encode(x_tgt)
 
         z_src = self.get_first_stage_encoding(z_src).detach()
         z_tgt = self.get_first_stage_encoding(z_tgt).detach()
                     
         # class conditional one hot encoding
-        c = self.modalities.index(target)
-        c = torch.nn.functional.one_hot(torch.tensor(c), num_classes=4).float()
+        c = self.modalities.index(target[0])
+        c = torch.nn.functional.one_hot(torch.tensor(c), num_classes=len(self.modalities)).float()
         c = c.unsqueeze(0).repeat(z_src.shape[0], 1).unsqueeze(1).to(self.device)
         
         out = [torch.cat([z_src, z_tgtl], dim=1), z_tgt, c]
@@ -939,7 +965,7 @@ class LatentDiffusion(DDPM):
         loss_simple = self.get_loss(model_output, target, mean=False).mean([1, 2, 3])
         loss_dict.update({f'{prefix}/loss_simple': loss_simple.mean()})
 
-        logvar_t = self.logvar[t].to(self.device)
+        logvar_t = self.logvar[t.cpu()].to(self.device)
         logvar_t = repeat(logvar_t, 'b -> b c', c=loss_simple.shape[1])
         loss = loss_simple / torch.exp(logvar_t) + logvar_t
         # loss = loss_simple / torch.exp(self.logvar) + self.logvar

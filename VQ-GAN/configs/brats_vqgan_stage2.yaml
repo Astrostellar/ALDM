@@ -27,7 +27,7 @@ model:
       target: taming.modules.losses.vqperceptual.VQLPIPSWithDiscriminator
       params:
         disc_conditional: False
-        disc_in_channels: 6
+        disc_in_channels: 9
         disc_start: 0
         disc_weight: 0.8
         codebook_weight: 1.0
@@ -40,12 +40,12 @@ data:
     train:
       target: taming.data.custom.CustomTrain
       params:
-        data_path: BraTS2021/TrainingData # to be filled
+        data_path: ../../../data/public_data/BraSyn/data_list/train # to be filled
     validation:
       target: taming.data.custom.CustomTest
       params:
-        data_path: BraTS2021/ValidationData # to be filled
+        data_path: ../../../data/public_data/BraSyn/data_list/val # to be filled
     test:
       target: taming.data.custom.CustomTest
       params:
-        data_path: BraTS2021/ValidationData # to be filled
+        data_path: ../../../data/public_data/BraSyn/data_list/val # to be filled
