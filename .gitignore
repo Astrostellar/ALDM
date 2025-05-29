@@ -11,6 +11,7 @@ test/data/legacy_modules.t7
 test/data/gpu_tensors.pt
 test/htmlcov
 test/.coverage
+*/core-python*
 */logs/
 */*.pyc
 */**/*.pyc
