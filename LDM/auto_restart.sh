@@ -9,7 +9,7 @@ while true; do
     echo "[$TIMESTAMP] Starting the Python script..." | tee -a "$LOG_FILE"
     fuser -vk /dev/nvidia*
     # 运行 Python 脚本
-    python main.py -b configs/$1.yaml \
+    python main.py -b configs/latent-diffusion/$1.yaml \
                    -t True \
                    --resume logs/$2/checkpoints/last.ckpt \
                    --gpus 0,1,2,3
