@@ -1,7 +1,9 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: latent-diffusion
 Version: 0.0.1
 License-File: LICENSE
 Requires-Dist: torch
 Requires-Dist: numpy
 Requires-Dist: tqdm
+Dynamic: license-file
+Dynamic: requires-dist

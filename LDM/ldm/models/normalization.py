@@ -15,7 +15,7 @@ class SPADE(nn.Module):
                              % norm_type)
 
         # The dimension of the intermediate embedding space. Yes, hardcoded.
-        nhidden = 64#128
+        nhidden = 64
 
         pw = kernel_size // 2
         self.mlp_shared = nn.Sequential(
@@ -66,8 +66,6 @@ class SPADEResnetBlock(nn.Module):
         # define normalization layers
         self.norm_0 = SPADE_Multimodal(modalities, fin, fin, kernel_size=3, norm_type='instance')
         self.norm_1 = SPADE_Multimodal(modalities, fmiddle, fmiddle, kernel_size=3, norm_type='instance')
-        if self.learned_shortcut:
-            self.norm_s = SPADE_Multimodal(modalities, fin, fin, kernel_size=3, norm_type='instance')
 
     # note the resnet block with SPADE also takes in |seg|,
     # the semantic segmentation map as input
@@ -83,7 +81,7 @@ class SPADEResnetBlock(nn.Module):
 
     def shortcut(self, x, modality):
         if self.learned_shortcut:
-            x_s = self.conv_s(self.norm_s(x, modality))
+            x_s = self.conv_s(x)
         else:
             x_s = x
         return x_s
@@ -94,13 +92,17 @@ class SPADEResnetBlock(nn.Module):
 class SPADEGenerator(nn.Module):
     def __init__(self,modalities, z_dim=3):
         super().__init__()
-        nf = 64 #128
+        nf = 64
         self.in_spade = SPADEResnetBlock(modalities, z_dim, nf)
         self.out_spade = SPADEResnetBlock(modalities, nf, z_dim)
+        self.conv_in = nn.Conv3d(z_dim, nf, kernel_size=3, padding=1)
+        self.conv_out = nn.Conv3d(nf, z_dim, kernel_size=3, padding=1)
 
 
     def forward(self, x, modality):
-        x = self.in_spade(x, modality)
-        x = self.out_spade(x, modality)
+        x_s = self.conv_in(x)
+        x = self.in_spade(x, modality) + x_s
+        x_s = self.conv_out(x)
+        x = self.out_spade(x, modality) + x_s
 
         return x
