@@ -9,9 +9,9 @@ while true; do
     echo "[$TIMESTAMP] Starting the Python script..." | tee -a "$LOG_FILE"
     fuser -vk /dev/nvidia*
     # 运行 Python 脚本
-    python main.py -b configs/latent-diffusion/brats-ldm-vq-4.yaml \
+    python main.py -b configs/$1.yaml \
                    -t True \
-                   --resume logs/2025-05-26T12-17-02_brats-ldm-vq-4/checkpoints/last.ckpt \
+                   --resume logs/$2/checkpoints/last.ckpt \
                    --gpus 0,1,2,3
 
     # 脚本异常退出后记录时间

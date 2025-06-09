@@ -5,7 +5,7 @@ from monai import transforms
 from monai.data import Dataset as MonaiDataset
 
 keys = ["PD", "PD_FS"]
-crop_size = (140, 140, 128)
+crop_size = (144, 144, 128)
 # crop_size = (64, 64, 64)
 
 fastmri_transforms = transforms.Compose(

@@ -2,6 +2,7 @@ model:
   base_learning_rate: 1.0e-06
   target: ldm.models.diffusion.ddpm.LatentDiffusion
   params:
+    # ckpt_path: logs/2025-05-22T21-43-18_fastmri-ldm-vq-4/checkpoints/epoch=000985.ckpt
     linear_start: 0.0015
     linear_end: 0.0195
     num_timesteps_cond: 1
@@ -41,7 +42,7 @@ model:
       target: ldm.models.vqgan.VQModel
       params:
         modalities: ['PD', 'PD_FS']
-        ckpt_path: '../VQ-GAN/logs/2025-05-17T20-17-02_fastmri_vqgan_stage2/checkpoints/last.ckpt'
+        ckpt_path: '../VQ-GAN/logs/2025-06-08T17-27-10_fastmri_vqgan_stage2/checkpoints/last.ckpt'
         embed_dim: 3
         n_embed: 8192
         ddconfig:
@@ -78,7 +79,7 @@ data:
     test:
       target: ldm.data.fastmri.CustomTest
       params:
-        data_path: ../../../data/public_data/fastMRI/knee_mri_clinical_seq_converted_selected_corrected_split_resampled/val # to be filled
+        data_path: ../../../data/public_data/fastMRI/knee_mri_clinical_seq_converted_selected_corrected_split_resampled/test # to be filled
 
 
 lightning:

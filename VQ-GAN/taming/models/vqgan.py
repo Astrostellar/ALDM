@@ -126,7 +126,7 @@ class VQModel(pl.LightningModule):
             target = [x for x in self.modalities if x not in source]
         x_src = self.get_input(batch, source)
         x_tar = self.get_input(batch, target)
-        skip_pass = 0
+        skip_pass = 1
 
         if self.stage == 1:
             xrec, qloss = self(x_src)
@@ -220,7 +220,7 @@ class VQModel(pl.LightningModule):
         x_tar = self.get_input(batch, target)
         x_src = x_src.to(self.device)
         x_tar = x_tar.to(self.device)
-        if self.stage == 1: target = None
+        if self.stage == 1: target = [None]
         xrec, _ = self(x_src, target[0])
         # if x_src.shape[1] > 3:
         #     assert xrec.shape[1] > 3

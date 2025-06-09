@@ -3,6 +3,7 @@ debug*
 datasets/
 checkpoints/
 results/
+*/outputs
 build/
 dist/
 torch.egg-info/
@@ -24,6 +25,6 @@ test/.coverage
 test/data/legacy_serialized.pt
 *~
 .idea
-
+run_log.txt
 #Ignore Wandb
 wandb/
