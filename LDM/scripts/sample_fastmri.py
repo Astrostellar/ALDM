@@ -19,7 +19,7 @@ def load_model_from_config(config, ckpt, verbose=False):
     pl_sd = torch.load(ckpt, map_location="cpu")
     sd = pl_sd["state_dict"]
     model = instantiate_from_config(config.model)
-    m, u = model.load_state_dict(sd, strict=False)
+    m, u = model.load_state_dict(sd, strict=True)
     if len(m) > 0 and verbose:
         print("missing keys:")
         print(m)
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--ddim_eta",
         type=float,
-        default=0.0,
+        default=1.0,
         help="ddim eta (eta=0.0 corresponds to deterministic sampling",
     )
     parser.add_argument(

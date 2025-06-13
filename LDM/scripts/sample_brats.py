@@ -138,7 +138,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--ddim_eta",
         type=float,
-        default=0.0,
+        default=1.0,
         help="ddim eta (eta=0.0 corresponds to deterministic sampling",
     )
     parser.add_argument(
