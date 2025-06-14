@@ -34,13 +34,7 @@ def get_brats_dataset(data_path, subject_keys):
             transforms.AddChanneld(keys=subject_keys),
             transforms.EnsureTyped(keys=subject_keys),
             transforms.Orientationd(keys=subject_keys, axcodes="RAI", allow_missing_keys=True),
-            transforms.CropForegroundd(keys=subject_keys, source_key=subject_keys[0], allow_missing_keys=True),
             transforms.SpatialPadd(keys=subject_keys, spatial_size=crop_size, allow_missing_keys=True),
-            transforms.RandSpatialCropd( keys=subject_keys,
-                roi_size=crop_size,
-                random_center=False, 
-                random_size=False,
-            ),
             transforms.ScaleIntensityRangePercentilesd(keys=subject_keys, lower=0, upper=99.75, b_min=0, b_max=1),
         ]
     )
@@ -77,6 +71,39 @@ def save_nifti(img, path):
     nifti_img = nib.Nifti1Image(img, np.eye(4))  # you might want to replace np.eye(4) with the correct affine matrix
     nib.save(nifti_img, path)
 
+def sample_brats(opt, model, source):
+    x_src = source.unsqueeze(0).to(device)
+    z_src , _, _ = model.first_stage_model.encode(x_src)
+    z_tgtl, _, _ = model.first_stage_model.encode(x_src, opt.target)
+    z_src = model.get_first_stage_encoding(z_src).detach()
+    z_tgtl = model.get_first_stage_encoding(z_tgtl).detach()
+
+    z_src = torch.cat([z_src, z_tgtl], dim=1)
+
+    x0 = z_src
+    c = keys.index(opt.target)
+    c = torch.nn.functional.one_hot(torch.tensor(c), num_classes=2).float()
+    c = c.unsqueeze(0).repeat(z_src.shape[0], 1).unsqueeze(1).to(device)
+    shape = z_src.shape[1:]
+    samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
+                                        conditioning=c,
+                                        batch_size=opt.n_samples,
+                                        shape=shape,
+                                        verbose=False,
+                                        unconditional_guidance_scale=opt.scale,
+                                        x0=x0,
+                                        eta=opt.ddim_eta)
+
+    x_samples_ddim = model.decode_first_stage(samples_ddim)
+    x_samples_ddim = torch.clamp((x_samples_ddim+1.0)/2.0, min=0.0, max=1.0).detach().cpu()
+
+    rec_src = model.decode_first_stage(z_src[:,:z_src.shape[1]//2])
+    rec_src = torch.clamp((rec_src+1.0)/2.0, min=0.0, max=1.0).detach().cpu()
+
+    tgtl = model.decode_first_stage(z_tgtl)
+    tgtl = torch.clamp((tgtl+1.0)/2.0, min=0.0, max=1.0).detach().cpu()
+
+    return x_samples_ddim, rec_src, tgtl
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -199,35 +226,29 @@ if __name__ == "__main__":
                 for key in exist_keys:
                     x_src.append(monai_dataset[0][key])
                 x_src = torch.stack(x_src, dim=1).to(device)  # shape: (1, C, D, H, W)
-                z_src , _, _ = model.first_stage_model.encode(x_src)
-                z_tgtl, _, _ = model.first_stage_model.encode(x_src, target_key)
-                z_src = model.get_first_stage_encoding(z_src).detach()
-                z_tgtl = model.get_first_stage_encoding(z_tgtl).detach()
-
-                z_src = torch.cat([z_src, z_tgtl], dim=1)
+                source_data = monai_dataset[0][opt.source]
+                x_samples_ddim = torch.zeros_like(source_data)  # Initialize with zeros
+                rec_src = torch.zeros_like(source_data)
+                tgtl =  torch.zeros_like(source_data)
+                weight_map = torch.zeros_like(source_data)
+                
+                for i in range(0, source_data.shape[1], 40):
+                    for j in range(0, source_data.shape[2], 40):
+                        for k in range(0, source_data.shape[3], 27):
+                            batch = source_data[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]]
+                            
+                            if batch.shape[1:] != crop_size:
+                                continue
+                            each_x_samples_ddim, each_rec_src, each_tgtl = sample_brats(opt, model, batch)
+                            x_samples_ddim[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += each_x_samples_ddim.squeeze(0)
+                            rec_src[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += each_rec_src.squeeze(0)
+                            tgtl[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += each_tgtl.squeeze(0)
+                            weight_map[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += 1
             
-                x0 = z_src
-                c = keys.index(target_key)
-                c = torch.nn.functional.one_hot(torch.tensor(c), num_classes=len(keys)).float()
-                c = c.unsqueeze(0).repeat(z_src.shape[0], 1).unsqueeze(1).to(device)
-                shape = z_src.shape[1:]
-                samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
-                                                 conditioning=c,
-                                                 batch_size=opt.n_samples,
-                                                 shape=shape,
-                                                 verbose=False,
-                                                 unconditional_guidance_scale=opt.scale,
-                                                 x0=x0,
-                                                 eta=opt.ddim_eta)
-
-                x_samples_ddim = model.decode_first_stage(samples_ddim)
-                x_samples_ddim = torch.clamp((x_samples_ddim+1.0)/2.0, min=0.0, max=1.0).detach().cpu()
-
-                rec_src = model.decode_first_stage(z_src[:,:z_src.shape[1]//2])
-                rec_src = torch.clamp((rec_src+1.0)/2.0, min=0.0, max=1.0).detach().cpu()
-
-                tgtl = model.decode_first_stage(z_tgtl)
-                tgtl = torch.clamp((tgtl+1.0)/2.0, min=0.0, max=1.0).detach().cpu()
+                weight_map[weight_map == 0] = 1  # Avoid division by zero
+                x_samples_ddim = x_samples_ddim / weight_map
+                rec_src = rec_src / weight_map
+                tgtl = tgtl / weight_map
 
                 # for x_sample in x_samples_ddim:
                 #     save_nifti(x_sample, os.path.join(sample_path, os.path.join( f"{base_count:04}.nii.gz")))
