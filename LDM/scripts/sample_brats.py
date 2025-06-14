@@ -71,10 +71,10 @@ def save_nifti(img, path):
     nifti_img = nib.Nifti1Image(img, np.eye(4))  # you might want to replace np.eye(4) with the correct affine matrix
     nib.save(nifti_img, path)
 
-def sample_brats(opt, model, source):
+def sample_brats(opt, model, source, target_key):
     x_src = source.unsqueeze(0).to(device)
     z_src , _, _ = model.first_stage_model.encode(x_src)
-    z_tgtl, _, _ = model.first_stage_model.encode(x_src, opt.target)
+    z_tgtl, _, _ = model.first_stage_model.encode(x_src, target_key)
     z_src = model.get_first_stage_encoding(z_src).detach()
     z_tgtl = model.get_first_stage_encoding(z_tgtl).detach()
 
@@ -226,7 +226,7 @@ if __name__ == "__main__":
                 for key in exist_keys:
                     x_src.append(monai_dataset[0][key])
                 x_src = torch.stack(x_src, dim=1).to(device)  # shape: (1, C, D, H, W)
-                source_data = monai_dataset[0][opt.source]
+                source_data = x_src
                 x_samples_ddim = torch.zeros_like(source_data)  # Initialize with zeros
                 rec_src = torch.zeros_like(source_data)
                 tgtl =  torch.zeros_like(source_data)
@@ -239,7 +239,7 @@ if __name__ == "__main__":
                             
                             if batch.shape[1:] != crop_size:
                                 continue
-                            each_x_samples_ddim, each_rec_src, each_tgtl = sample_brats(opt, model, batch)
+                            each_x_samples_ddim, each_rec_src, each_tgtl = sample_brats(opt, model, batch, target_key)
                             x_samples_ddim[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += each_x_samples_ddim.squeeze(0)
                             rec_src[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += each_rec_src.squeeze(0)
                             tgtl[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += each_tgtl.squeeze(0)
