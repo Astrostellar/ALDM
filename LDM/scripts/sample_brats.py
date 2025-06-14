@@ -60,7 +60,6 @@ def load_model_from_config(config, ckpt, verbose=False):
 
 
 def save_nifti(img, path):
-    img = img.squeeze(0)  # remove batch dimension, now it's (1, 192, 192, 160)
     if len(img.shape) != 4: return
     img = img.permute(1, 2, 3, 0)  # reorder dimensions to be compatible with nibabel
 
@@ -72,7 +71,7 @@ def save_nifti(img, path):
     nib.save(nifti_img, path)
 
 def sample_brats(opt, model, source, target_key):
-    x_src = source.unsqueeze(0).to(device)
+    x_src = source.to(device)
     z_src , _, _ = model.first_stage_model.encode(x_src)
     z_tgtl, _, _ = model.first_stage_model.encode(x_src, target_key)
     z_src = model.get_first_stage_encoding(z_src).detach()
@@ -81,8 +80,8 @@ def sample_brats(opt, model, source, target_key):
     z_src = torch.cat([z_src, z_tgtl], dim=1)
 
     x0 = z_src
-    c = keys.index(opt.target)
-    c = torch.nn.functional.one_hot(torch.tensor(c), num_classes=2).float()
+    c = keys.index(target_key)
+    c = torch.nn.functional.one_hot(torch.tensor(c), num_classes=4).float()
     c = c.unsqueeze(0).repeat(z_src.shape[0], 1).unsqueeze(1).to(device)
     shape = z_src.shape[1:]
     samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
@@ -225,24 +224,24 @@ if __name__ == "__main__":
                 x_src = []
                 for key in exist_keys:
                     x_src.append(monai_dataset[0][key])
-                x_src = torch.stack(x_src, dim=1).to(device)  # shape: (1, C, D, H, W)
+                x_src = torch.stack(x_src, dim=1)  # shape: (1, C, D, H, W)
                 source_data = x_src
-                x_samples_ddim = torch.zeros_like(source_data)  # Initialize with zeros
-                rec_src = torch.zeros_like(source_data)
-                tgtl =  torch.zeros_like(source_data)
-                weight_map = torch.zeros_like(source_data)
+                x_samples_ddim = torch.zeros_like(source_data[:,0,...])  # Initialize with zeros
+                rec_src = torch.zeros_like(source_data[:,0,...])
+                tgtl =  torch.zeros_like(source_data[:,0,...])
+                weight_map = torch.zeros_like(source_data[:,0,...])
                 
-                for i in range(0, source_data.shape[1], 40):
-                    for j in range(0, source_data.shape[2], 40):
-                        for k in range(0, source_data.shape[3], 27):
-                            batch = source_data[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]]
+                for i in range(0, source_data.shape[2], 40):
+                    for j in range(0, source_data.shape[3], 40):
+                        for k in range(0, source_data.shape[4], 27):
+                            batch = source_data[:, :, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]]
                             
-                            if batch.shape[1:] != crop_size:
+                            if batch.shape[-3:] != crop_size:
                                 continue
                             each_x_samples_ddim, each_rec_src, each_tgtl = sample_brats(opt, model, batch, target_key)
-                            x_samples_ddim[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += each_x_samples_ddim.squeeze(0)
-                            rec_src[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += each_rec_src.squeeze(0)
-                            tgtl[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += each_tgtl.squeeze(0)
+                            x_samples_ddim[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += each_x_samples_ddim[:,1:2].squeeze(0)
+                            rec_src[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += each_rec_src[:,1:2].squeeze(0)
+                            tgtl[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += each_tgtl[:,1:2].squeeze(0)
                             weight_map[:, i:i+crop_size[0], j:j+crop_size[1], k:k+crop_size[2]] += 1
             
                 weight_map[weight_map == 0] = 1  # Avoid division by zero
